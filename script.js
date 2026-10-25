@@ -1,10 +1,7 @@
+const mobileInput = document.getElementById('mobile-input');
 // ==========================================
 // 1. CONFIGURATION & VARIABLES GLOBALES
 // ==========================================
-let isMobileMode = false;
-const mobileInput = document.getElementById('mobile-input');
-const kbTrigger = document.getElementById('keyboard-trigger');
-
 const container = document.getElementById('game-container');
 const scoreElement = document.getElementById('score');
 const levelElement = document.getElementById('level');
@@ -53,6 +50,7 @@ let currentCombo = 0;
 let scoreMultiplier = 1;       
 
 if (highScoreElement) highScoreElement.innerText = highScore;
+if (restartBtn) restartBtn.addEventListener('click', startGame);
 
 function getDifficultySettings() {
     return {
@@ -62,12 +60,12 @@ function getDifficultySettings() {
         wordsToNextLevel: 5 + (level * 2)                         
     };
 }
-
 // ==========================================
 // 2. MOTEUR AUDIO (SYNTHÉTISEUR)
 // ==========================================
 let audioCtx = null;
 let musicInterval = null;
+
 const synthMelody = [
     110, 110, 130, 110, 146, 146, 130, 165,
     110, 110, 130, 110, 196, 196, 165, 130
@@ -77,6 +75,7 @@ let currentNoteIndex = 0;
 function startCyberpunkMusic() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (musicInterval) clearInterval(musicInterval);
+
     musicInterval = setInterval(() => {
         if (!isPlaying) return;
         const freq = synthMelody[currentNoteIndex];
@@ -84,7 +83,7 @@ function startCyberpunkMusic() {
         const gain = audioCtx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
@@ -101,7 +100,7 @@ function playLaserSound() {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(880, audioCtx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
@@ -111,127 +110,64 @@ function playLaserSound() {
 
 function playExplosionSound() {
     if (!audioCtx) return;
-    const bufferSize = audioCtx.sampleRate * 0.3;
+    const bufferSize = audioCtx.sampleRate * 0.4;
     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
     const noiseNode = audioCtx.createBufferSource();
     noiseNode.buffer = buffer;
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(600, audioCtx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.3);
+    filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.4);
     const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
     noiseNode.connect(filter);
     filter.connect(gain);
     gain.connect(audioCtx.destination);
     noiseNode.start();
-    noiseNode.stop(audioCtx.currentTime + 0.3);
+    noiseNode.stop(audioCtx.currentTime + 0.4);
 }
 // ==========================================
-// 3. EFFETS VISUELS & ARSENAL
+// 3. EFFETS VISUELS (JUICE)
 // ==========================================
+function triggerScreenShake() {
+    if (!container) return;
+    container.classList.remove('shake-active');
+    void container.offsetWidth; 
+    container.classList.add('shake-active');
+    setTimeout(() => { container.classList.remove('shake-active'); }, 200);
+}
+
 function createExplosion(x, y, color = '#f43f5e') {
     if (!container) return;
-    const particleCount = 6;
+    const particleCount = 8;
     for (let i = 0; i < particleCount; i++) {
         const particle = document.createElement('div');
-        particle.style.position = 'absolute';
-        particle.style.width = '4px';
-        particle.style.height = '4px';
+        particle.className = 'particle';
         particle.style.left = x + 'px';
         particle.style.top = y + 'px';
         particle.style.backgroundColor = color;
-        particle.style.borderRadius = '50%';
-        container.appendChild(particle);
+        particle.style.boxShadow = `0 0 8px ${color}`;
 
         const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 3 + 2;
-        let px = x;
-        let py = y;
+        const distance = Math.random() * 40 + 20;
+        const moveX = Math.cos(angle) * distance;
+        const moveY = Math.sin(angle) * distance;
 
-        let pInterval = setInterval(() => {
-            px += Math.cos(angle) * speed;
-            py += Math.sin(angle) * speed;
-            particle.style.left = px + 'px';
-            particle.style.top = py + 'px';
-        }, 1000 / 60);
+        particle.style.setProperty('--mx', `${moveX}px`);
+        particle.style.setProperty('--my', `${moveY}px`);
+        container.appendChild(particle);
 
         setTimeout(() => {
-            clearInterval(pInterval);
             if (particle && container.contains(particle)) container.removeChild(particle);
-        }, 300);
+        }, 400);
     }
 }
-
-function createLaser(startX, startY, targetX, targetY, wordTarget, letterIndex) {
-    const laserEl = document.createElement('div');
-    laserEl.style.position = 'absolute';
-    laserEl.style.width = '4px';
-    laserEl.style.height = '12px';
-    laserEl.style.background = '#f43f5e';
-    laserEl.style.boxShadow = '0 0 6px #f43f5e';
-    laserEl.style.borderRadius = '2px';
-    laserEl.style.left = startX + 'px';
-    laserEl.style.top = startY + 'px';
-    if (container) container.appendChild(laserEl);
-    
-    lasers.push({
-        element: laserEl,
-        x: startX,
-        y: startY,
-        targetX: targetX,
-        targetY: targetY,
-        wordTarget: wordTarget,
-        letterIndex: letterIndex
-    });
-    playLaserSound();
-}
-
-function spawnWord() {
-    if (!isPlaying) return;
-    const settings = getDifficultySettings();
-    if (activeWords.length >= settings.maxWordsOnScreen) return;
-
-    const randomText = wordList[Math.floor(Math.random() * wordList.length)].toUpperCase();
-    const wordElement = document.createElement('div');
-    wordElement.className = 'word-container';
-    wordElement.innerHTML = randomText.split('').map((letter, index) => {
-        return `<span id="letter-${index}" class="letter">${letter}</span>`;
-    }).join('');
-    
-    if (container) container.appendChild(wordElement);
-
-    const wordWidth = wordElement.getBoundingClientRect().width || 80;
-    let minX = 40 + wordWidth / 2;
-    let maxX = window.innerWidth - 40 - wordWidth / 2;
-    
-    if (isMobileMode) {
-        minX = 25 + wordWidth / 2;
-        maxX = Math.min(window.innerWidth, 400) - 25 - wordWidth / 2;
-    }
-    if (minX > maxX) { minX = 15; maxX = window.innerWidth - 15; }
-
-    const randomX = Math.random() * (maxX - minX) + minX;
-    const startY = isMobileMode ? 95 : 60;
-
-    wordElement.style.left = `${randomX}px`;
-    wordElement.style.top = `${startY}px`;
-
-    activeWords.push({
-        text: randomText,
-        element: wordElement,
-        x: randomX,
-        y: startY,
-        typedIndex: 0
-    });
-    refreshTargetableHelpers();
-}
-
 // ==========================================
-// 4. ÉTATS DU JEU
+// 4. ÉTATS DU JEU & LOGIQUE DES BONUS
 // ==========================================
 function startGame() {
     isPlaying = true;
@@ -240,8 +176,8 @@ function startGame() {
     scoreMultiplier = 1;
     startCyberpunkMusic();
 
-    activeWords.forEach(w => { if (w.element && container.contains(w.element)) container.removeChild(w.element); });
-    lasers.forEach(l => { if (l.element && container.contains(l.element)) container.removeChild(l.element); });
+    activeWords.forEach(w => { if (w.element && container && container.contains(w.element)) container.removeChild(w.element); });
+    lasers.forEach(l => { if (l.element && container && container.contains(l.element)) container.removeChild(l.element); });
 
     activeWords = [];
     lasers = [];
@@ -254,22 +190,35 @@ function startGame() {
     if (scoreElement) scoreElement.innerText = score;
     if (levelElement) levelElement.innerText = level;
     
-    if (comboMultiplierElement) {
-        comboMultiplierElement.innerText = "x1";
-        comboMultiplierElement.style.color = "#22d3ee";
+    const displayElement = comboMultiplierElement || streakElement;
+    if (displayElement) {
+        displayElement.innerText = "x1";
+        displayElement.style.color = "#22d3ee";
     }
 
     const settings = getDifficultySettings();
     if (streakElement) streakElement.innerText = `0/${settings.wordsToNextLevel}`;
     
     if (gameOverScreen) gameOverScreen.classList.add('hidden');
-    if (playerShip) playerShip.style.left = '50%';
+    if (playerShip) {
+        playerShip.style.transform = 'translateX(-50%) rotate(0deg)';
+        playerShip.style.left = '50%';
+    }
 
     if(gameInterval) clearInterval(gameInterval);
     gameInterval = setInterval(updateGame, 1000 / 60);
 
-    if (isMobileMode && mobileInput) {
-        setTimeout(() => { mobileInput.value = ""; mobileInput.focus(); }, 300);
+    // ACTIVER LE CLAVIER MOBILE : Force le focus sur l'input invisible au lancement
+    if (mobileInput) {
+        mobileInput.value = "";
+        mobileInput.focus();
+    }
+    
+    // Si l'utilisateur clique sur l'écran en cours de partie, on lui remet le clavier
+    if (container) {
+        container.addEventListener('click', () => { 
+            if(isPlaying && mobileInput) mobileInput.focus(); 
+        });
     }
 }
 
@@ -284,137 +233,175 @@ function triggerGameOver() {
         if (highScoreElement) highScoreElement.innerText = highScore;
     }
 
-    const deviceSelection = document.getElementById('device-selection');
-    if (deviceSelection) deviceSelection.style.display = 'flex';
-    if (restartBtn) restartBtn.style.display = 'none';
-
     if (screenTitle) screenTitle.innerText = "GAME OVER";
-    if (screenStats) screenStats.innerHTML = `Vous avez atteint le niveau <span>${level}</span><br>Score Final : <span>${score}</span>`;
+    if (screenStats) screenStats.innerHTML = `Vous avez atteint le niveau <span>${level}</span><br>Score Final : <span>${score}</span><br>Meilleur Score : <span>${highScore}</span>`;
+    if (restartBtn) restartBtn.innerText = "REPLAY";
     if (gameOverScreen) gameOverScreen.classList.remove('hidden');
 }
 
-// ÉCOUTEURS DU MENU D'ACCUEIL
-document.getElementById('btn-pc').addEventListener('click', () => {
-    isMobileMode = false;
-    document.body.classList.remove('mode-mobile');
-    if (kbTrigger) kbTrigger.style.display = 'none';
-    startGame();
-});
+function triggerBonusBomb() {
+    triggerScreenShake();
+    createExplosion(window.innerWidth / 2, window.innerHeight / 2, '#eab308');
+    
+    activeWords.forEach(w => {
+        score += 5 * scoreMultiplier;
+        wordsDestroyedInLevel++;
+        if (w.element && container && container.contains(w.element)) container.removeChild(w.element);
+    });
+    
+    if (scoreElement) scoreElement.innerText = score;
+    activeWords = [];
+    targetedWord = null;
+    
+    const settings = getDifficultySettings();
+    const displayElement = streakElement || comboMultiplierElement;
+    if (displayElement) displayElement.innerText = `${wordsDestroyedInLevel}/${settings.wordsToNextLevel}`;
+    playExplosionSound();
+}
 
-document.getElementById('btn-mobile').addEventListener('click', () => {
-    isMobileMode = true;
-    document.body.classList.add('mode-mobile');
-    if (kbTrigger) kbTrigger.style.display = 'block';
-    startGame();
-});
 
-if (kbTrigger) {
-    kbTrigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (mobileInput) mobileInput.focus();
+// ==========================================
+// 5. APPARITIONS & LOGIQUE CYCLIQUEMENT MISE À JOUR
+// ==========================================
+function spawnWord() {
+    const settings = getDifficultySettings();
+    if (activeWords.length >= settings.maxWordsOnScreen) return;
+
+    let filteredList = [];
+    if (level === 1) filteredList = wordList.filter(word => word.length <= 4);
+    else if (level === 2) filteredList = wordList.filter(word => word.length <= 5);
+    else if (level === 3) filteredList = wordList.filter(word => word.length <= 6);
+    else filteredList = wordList;
+
+    if (filteredList.length === 0) filteredList = wordList;
+    const text = filteredList[Math.floor(Math.random() * filteredList.length)];
+    
+    const element = document.createElement('div');
+    element.className = 'word-container';
+    const posX = Math.random() * (window.innerWidth * 0.7) + (window.innerWidth * 0.15);
+    element.style.left = posX + 'px';
+    element.style.top = '0px';
+    
+    let wordType = 'NORMAL';
+    const rand = Math.random();
+    if (rand > 0.7 && rand <= 0.9) {
+        wordType = 'RAPIDE';
+        element.style.textShadow = '0 0 10px #ef4444';
+    } else if (rand > 0.9) {
+        wordType = 'BONUS';
+        element.style.textShadow = '0 0 10px #eab308';
+    }
+    
+    let htmlContent = "";
+    for (let i = 0; i < text.length; i++) {
+        const helperClass = (i === 0 && !targetedWord) ? "targetable" : "";
+        let extraColor = '';
+        if (wordType === 'RAPIDE') extraColor = 'color: #f87171;';
+        if (wordType === 'BONUS') extraColor = 'color: #fef08a;';
+        htmlContent += `<span class="letter ${helperClass}" id="letter-${i}" style="${extraColor}">${text[i]}</span>`;
+    }
+    element.innerHTML = htmlContent;
+    if (container) container.appendChild(element);
+    
+    activeWords.push({
+        text: text, element: element, posX: posX, posY: 0, typedIndex: 0, validatedIndex: 0, type: wordType
     });
 }
-if (container) {
-    container.addEventListener('click', () => { 
-        if(isPlaying && isMobileMode && mobileInput) mobileInput.focus(); 
+
+function createLaser(startX, startY, targetX, targetY, targetWordRef, targetLetterIndex) {
+    playLaserSound();
+    const laserElement = document.createElement('div');
+    laserElement.className = 'laser';
+    laserElement.style.left = startX + 'px';
+    laserElement.style.top = startY + 'px';
+    
+    const angle = Math.atan2(targetY - startY, targetX - startX);
+    laserElement.style.transform = `translate(-50%, -50%) rotate(${angle + Math.PI/2}rad)`;
+    if (container) container.appendChild(laserElement);
+
+    const angleDeg = (angle * 180 / Math.PI) + 90;
+    if (playerShip) playerShip.style.transform = `translateX(-50%) rotate(${angleDeg}deg)`;
+
+    lasers.push({
+        element: laserElement, x: startX, y: startY,
+        vx: Math.cos(angle) * 35, vy: Math.sin(angle) * 35,
+        wordRef: targetWordRef, targetIndex: targetLetterIndex
     });
 }
-// ==========================================
-// 5. BOUCLE DE RENDU PRINCIPALE (MOUVEMENTS)
-// ==========================================
+
 function updateGame() {
-    if (!isPlaying) return;
-
     const settings = getDifficultySettings();
     spawnTimer++;
-    if (spawnTimer >= settings.spawnDelay) {
-        spawnWord();
-        spawnTimer = 0;
-    }
+    if (spawnTimer >= settings.spawnDelay) { spawnWord(); spawnTimer = 0; }
 
     for (let i = activeWords.length - 1; i >= 0; i--) {
         let w = activeWords[i];
-        w.y += settings.wordSpeed;
-        if (w.element) {
-            w.element.style.top = w.y + 'px';
-            w.element.style.left = w.x + 'px';
-        }
-
-        const limitY = window.innerHeight - 90;
-        if (w.y >= limitY) {
-            triggerGameOver();
-            return;
-        }
+        const currentSpeed = w.type === 'RAPIDE' ? settings.wordSpeed * 2 : settings.wordSpeed;
+        w.posY += currentSpeed;
+        if (w.element) w.element.style.top = w.posY + 'px';
+        if (w.posY > window.innerHeight - 110) { triggerGameOver(); return; }
     }
 
     for (let i = lasers.length - 1; i >= 0; i--) {
         let l = lasers[i];
-        const dx = l.targetX - l.x;
-        const dy = l.targetY - l.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        l.x += l.vx; l.y += l.vy;
+        if (l.element) { l.element.style.left = l.x + 'px'; l.element.style.top = l.y + 'px'; }
 
-        if (distance > 15) {
-            l.x += (dx / distance) * 15;
-            l.y += (dy / distance) * 15;
-            if (l.element) {
-                l.element.style.left = l.x + 'px';
-                l.element.style.top = l.y + 'px';
-            }
-        } else {
-            if (l.element && container.contains(l.element)) container.removeChild(l.element);
-            createExplosion(l.targetX, l.targetY, '#22d3ee');
-            
-            if (l.wordTarget && l.wordTarget.element) {
-                const letterEl = l.wordTarget.element.querySelector(`#letter-${l.letterIndex}`);
-                if (letterEl) letterEl.className = 'letter destroyed';
+        if (activeWords.includes(l.wordRef)) {
+            const targetLetterElement = l.wordRef.element.querySelector(`#letter-${l.targetIndex}`);
+            if (targetLetterElement) {
+                const letterRect = targetLetterElement.getBoundingClientRect();
+                if (l.y <= letterRect.bottom && l.y >= letterRect.top - 20) {
+                    if (l.targetIndex === l.wordRef.validatedIndex) {
+                        createExplosion(l.x, l.y, l.wordRef.type === 'BONUS' ? '#eab308' : '#38bdf8');
+                        targetLetterElement.className = 'letter destroyed';
+                        l.wordRef.validatedIndex++;
+                        const nextLetterElement = l.wordRef.element.querySelector(`#letter-${l.wordRef.validatedIndex}`);
+                        if (nextLetterElement) nextLetterElement.className = 'letter active';
 
-                if (l.wordTarget.typedIndex === l.wordTarget.text.length) {
-                    score += l.wordTarget.text.length * scoreMultiplier;
-                    wordsDestroyedInLevel++;
-                    if (scoreElement) scoreElement.innerText = score;
+                        if (l.wordRef.validatedIndex === l.wordRef.text.length) {
+                            let pointsGagnes = 10;
+                            if (l.wordRef.type === 'RAPIDE') { pointsGagnes = 20; triggerScreenShake(); }
+                            else if (l.wordRef.type === 'BONUS') { pointsGagnes = 30; triggerBonusBomb(); }
+                            
+                            score += pointsGagnes * scoreMultiplier;
+                            wordsDestroyedInLevel++;
+                            if (scoreElement) scoreElement.innerText = score;
+                            playExplosionSound();
+                            
+                            if (l.wordRef.element && container && container.contains(l.wordRef.element)) container.removeChild(l.wordRef.element);
+                            activeWords = activeWords.filter(item => item !== l.wordRef);
+                            targetedWord = null;
+                            
+                            const displayElement = streakElement || comboMultiplierElement;
+                            if (displayElement) displayElement.innerText = `${wordsDestroyedInLevel}/${settings.wordsToNextLevel}`;
 
-                    if (container.contains(l.wordTarget.element)) container.removeChild(l.wordTarget.element);
-                    const wordIdx = activeWords.indexOf(l.wordTarget);
-                    if (wordIdx > -1) activeWords.splice(wordIdx, 1);
-                    if (targetedWord === l.wordTarget) targetedWord = null;
-
-                    // == ICI : REACTION AU CHANGEMENT DE NIVEAU ==
-                    if (wordsDestroyedInLevel >= settings.wordsToNextLevel) {
-                        level++;
-                        wordsDestroyedInLevel = 0;
-                        if (levelElement) levelElement.innerText = level;
-
-                        // On nettoie tous les autres mots restants à l'écran
-                        activeWords.forEach(w => {
-                            if (w.element && container && container.contains(w.element)) {
-                                container.removeChild(w.element);
-                            }
-                        });
-                        activeWords = [];
-                        targetedWord = null;
-
-                        // Petit effet visuel bonus pour fêter ça
-                        createExplosion(window.innerWidth / 2, window.innerHeight / 2, '#38bdf8');
+                            if (wordsDestroyedInLevel >= settings.wordsToNextLevel) {
+                                level++; wordsDestroyedInLevel = 0;
+                                if (levelElement) {
+                                    levelElement.innerText = level;
+                                    levelElement.style.color = '#00ffcc';
+                                    setTimeout(() => levelElement.style.color = '#ffffff', 500);
+                                }
+                                const newSettings = getDifficultySettings();
+                                if (streakElement) streakElement.innerText = `0/${newSettings.wordsToNextLevel}`;
+                            } else { refreshTargetableHelpers(); }
+                        }
                     }
-                    
-                    playExplosionSound();
-                    refreshTargetableHelpers();
+                    if (l.element && container && container.contains(l.element)) container.removeChild(l.element); 
+                    lasers.splice(i, 1); continue;
                 }
             }
-            lasers.splice(i, 1);
-            continue;
         }
-
-        if (l.y < 0 || l.x < 0 || l.x > window.innerWidth) {
-            if (l.element && container.contains(l.element)) container.removeChild(l.element);
-            lasers.splice(i, 1);
+        if (l.y < 0 || l.x < 0 || l.x > window.innerWidth) { 
+            if (l.element && container && container.contains(l.element)) container.removeChild(l.element); 
+            lasers.splice(i, 1); 
         }
     }
 }
 
-
 function refreshTargetableHelpers() {
-    if (targetedWord) return;
+    if (targetedWord) return; // Ne fait rien si un mot est verrouillé
     activeWords.forEach(w => {
         const firstLetter = w.element.querySelector('#letter-0');
         if(firstLetter && !firstLetter.classList.contains('destroyed')) {
@@ -424,7 +411,7 @@ function refreshTargetableHelpers() {
 }
 
 // ==========================================
-// 6. ÉVÉNEMENTS CLAVIER UNIFIÉS
+// 6. ÉVÉNEMENTS CLAVIER (CIBLAGE SANS CONFLIT DE LETTRES)
 // ==========================================
 window.addEventListener('keydown', (e) => {
     if (!isPlaying || e.key.length !== 1) return;
@@ -435,6 +422,7 @@ window.addEventListener('keydown', (e) => {
     let toucheCorrecte = false;
 
     if (targetedWord) {
+        // --- CAS 1 : UN MOT EST DÉJÀ STRICTEMENT VERROUILLÉ ---
         const expectedLetter = targetedWord.text[targetedWord.typedIndex];
         if (keyPressed === expectedLetter) {
             toucheCorrecte = true;
@@ -445,26 +433,35 @@ window.addEventListener('keydown', (e) => {
             createLaser(shipX, shipY, letterRect.left + letterRect.width / 2, letterRect.top + letterRect.height / 2, targetedWord, targetedWord.typedIndex);
             targetedWord.typedIndex++;
 
-            if (targetedWord.typedIndex === targetedWord.text.length) targetedWord = null;
+            if (targetedWord.typedIndex === targetedWord.text.length) {
+                targetedWord = null;
+            }
         }
     } else {
+        // --- CAS 2 : CHOIX LIBRE (AVEC GESTION DES DOUBLONS DE LETTRES) ---
+        // Étape 1 : On cherche en priorité si on avait déjà commencé un mot qui attend CETTE lettre exacte
         for (let w of activeWords) {
             if (w.typedIndex > 0 && w.text[w.typedIndex] === keyPressed) {
                 toucheCorrecte = true;
-                targetedWord = w;
+                targetedWord = w; // On reverrouille ce mot en cours
                 break;
             }
         }
+
+        // Étape 2 : Si aucun mot en cours ne correspond, on cherche un NOUVEAU mot qui commence par cette lettre
         if (!toucheCorrecte) {
             for (let w of activeWords) {
                 if (w.typedIndex === 0 && w.text[0] === keyPressed) {
                     toucheCorrecte = true;
-                    targetedWord = w;
+                    targetedWord = w; // On verrouille ce nouveau mot
                     break;
                 }
             }
         }
+
+        // Étape 3 : Si on a trouvé le bon mot (nouveau ou en cours), on applique les effets et le tir
         if (toucheCorrecte && targetedWord) {
+            // Nettoyage visuel des indices d'aide des autres mots
             activeWords.forEach(word => { 
                 if (word !== targetedWord) { 
                     const currentLetter = word.element.querySelector(`#letter-${word.typedIndex}`); 
@@ -472,6 +469,7 @@ window.addEventListener('keydown', (e) => {
                 } 
             });
 
+            // On récupère la lettre qu'on vient de taper (à son indice actuel)
             const currentIndex = targetedWord.typedIndex;
             const letterElement = targetedWord.element.querySelector(`#letter-${currentIndex}`);
             if (letterElement) letterElement.className = 'letter active';
@@ -480,10 +478,14 @@ window.addEventListener('keydown', (e) => {
             createLaser(shipX, shipY, letterRect.left + letterRect.width / 2, letterRect.top + letterRect.height / 2, targetedWord, currentIndex);
             targetedWord.typedIndex++;
 
-            if (targetedWord.typedIndex === targetedWord.text.length) targetedWord = null;
+            // Si le mot est fini dès la première lettre (mots de 1 lettre)
+            if (targetedWord.typedIndex === targetedWord.text.length) {
+                targetedWord = null;
+            }
         }
     }
 
+    // --- GESTION DU MULTIPLICATEUR DE COMBO ---
     if (toucheCorrecte) {
         currentCombo++;
         if (currentCombo >= 30) scoreMultiplier = 4;
@@ -491,26 +493,37 @@ window.addEventListener('keydown', (e) => {
         else if (currentCombo >= 10) scoreMultiplier = 2;
         else scoreMultiplier = 1;
         
-        if (comboMultiplierElement) {
-            comboMultiplierElement.innerText = `x${scoreMultiplier}`;
-            if (scoreMultiplier === 4) comboMultiplierElement.style.color = "#f43f5e";
-            else if (scoreMultiplier === 3) comboMultiplierElement.style.color = "#eab308";
-            else if (scoreMultiplier === 2) comboMultiplierElement.style.color = "#a855f7";
-            else comboMultiplierElement.style.color = "#22d3ee";
+        const displayElement = comboMultiplierElement || streakElement;
+        if (displayElement) {
+            displayElement.innerText = `x${scoreMultiplier}`;
+            if (scoreMultiplier === 4) displayElement.style.color = "#f43f5e";
+            else if (scoreMultiplier === 3) displayElement.style.color = "#eab308";
+            else if (scoreMultiplier === 2) displayElement.style.color = "#a855f7";
+            else displayElement.style.color = "#22d3ee";
         }
     } else {
         currentCombo = 0; scoreMultiplier = 1;
-        if (comboMultiplierElement) { comboMultiplierElement.innerText = "x1"; comboMultiplierElement.style.color = "#64748b"; }
+        const displayElement = comboMultiplierElement || streakElement;
+        if (displayElement) { displayElement.innerText = "x1"; displayElement.style.color = "#64748b"; }
     }
 });
-
+// ==========================================
+// 8. COMPATIBILITÉ TACTILE / SMARTPHONE
+// ==========================================
 if (mobileInput) {
     mobileInput.addEventListener('input', (e) => {
         if (!isPlaying) return;
         const text = e.target.value;
         if (text.length > 0) {
             const lastChar = text[text.length - 1];
-            window.dispatchEvent(new KeyboardEvent('keydown', { key: lastChar }));
+            
+            // On crée un faux événement "keydown" identique à celui du PC
+            const fakeEvent = { key: lastChar };
+            
+            // On déclenche manuellement la logique de tir
+            window.dispatchEvent(new KeyboardEvent('keydown', fakeEvent));
+            
+            // On vide l'input pour être prêt à recevoir la lettre suivante
             mobileInput.value = ""; 
         }
     });

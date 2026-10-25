@@ -1,80 +1,126 @@
-/* ==========================================
-   1. REGLAGES GENERAUX DE LA ZONE DE JEU
-   ========================================== */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    user-select: none;
-    -webkit-user-select: none;
-}
-
 body {
-    background-color: #020617;
-    color: #ffffff;
-    font-family: 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    background-color: #080c14;
+    color: white;
+    font-family: 'Courier New', Courier, monospace;
     overflow: hidden;
-    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     height: 100vh;
+    user-select: none;
 }
 
 #game-container {
     position: relative;
     width: 100vw;
     height: 100vh;
-    height: 100svh; /* Empêche les décalages dus au clavier mobile */
-    background: radial-gradient(circle at center, #0f172a 0%, #020617 100%);
-    overflow: hidden;
+    background: radial-gradient(circle, #111827 0%, #030712 100%);
+    box-sizing: border-box;
 }
 
-/* ==========================================
-   2. INTERFACE DE JEU (HUD FLOTTANT)
-   ========================================== */
+.word-container {
+    position: absolute;
+    font-size: 26px;
+    font-weight: bold;
+    letter-spacing: 4px;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    z-index: 2;
+}
+
+.letter {
+    display: inline-block;
+    color: #ffffff;
+    transition: color 0.05s ease;
+}
+
+/* Lettre verrouillée et ciblée par le joueur */
+.letter.active {
+    color: #ff3366;
+    text-shadow: 0 0 10px #ff3366;
+}
+
+/* Lettres disponibles mais pas encore ciblées */
+.letter.targetable {
+    color: #38bdf8;
+}
+
+.letter.destroyed {
+    visibility: hidden;
+    opacity: 0;
+}
+
+/* 🚀 VAISSEAU SPATIAL (Zone de pivot propre pour le SVG) */
+#player-ship {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    width: 60px;
+    height: 60px;
+    transform: translateX(-50%) rotate(0deg);
+    z-index: 10;
+    transform-origin: 50% 50%;
+    transition: left 0.1s ease-out;
+
+    /* DESSIN VECTORIEL NÉON (Chasseur spatial en lignes bleues et blanches) */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://w3.org' viewBox='0 0 60 60' fill='none'><path d='M30 5 L55 55 L30 43 L5 55 Z' fill='%231e293b' stroke='%2338bdf8' stroke-width='3' stroke-linejoin='round'/><polygon points='30,15 45,48 30,40 15,48' fill='none' stroke='%23ffffff' stroke-width='1.5'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    /* Effet d'illumination néon stable */
+    filter: drop-shadow(0 0 8px #38bdf8);
+}
+
+
+/* ⚡ LASERS (Désormais débloqués et visibles) */
+.laser {
+    position: absolute;
+    width: 6px;
+    height: 18px;
+    background-color: #f43f5e;
+    box-shadow: 0 0 10px #f43f5e;
+    border-radius: 3px;
+    z-index: 1;
+    transform: translate(-50%, -50%);
+}
+
+/* 📊 PANNEAU D'AFFICHAGE */
 #hud {
     position: absolute;
     top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 20px;
+    right: 20px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 15px;
-    background: rgba(15, 23, 42, 0.85);
+    font-size: 20px;
+    color: #38bdf8;
+    z-index: 10;
+    background: rgba(15, 23, 42, 0.6);
     padding: 10px 20px;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 16px;
-    color: #fff;
-    border: 1px solid rgba(56, 189, 248, 0.25);
     border-radius: 8px;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    z-index: 100;
-    width: 90%;
-    max-width: 800px;
+    border: 1px solid #1e293b;
 }
 
-.hud-item {
+.hud-item span {
+    color: #ffffff;
     font-weight: bold;
-    white-space: nowrap;
 }
 
-/* ==========================================
-   3. MENUS ET ÉCRANS INTERMÉDIAIRES
-   ========================================== */
+/* 🛑 ÉCRAN DE GAME OVER / DESIGN D'ACCUEIL */
 #game-over-screen {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(2, 6, 23, 0.95);
+    width: 100vw;
+    height: 100vh;
+    background: rgba(3, 7, 18, 0.95);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    z-index: 200;
-    padding: 20px;
-    text-align: center;
+    z-index: 100;
 }
 
 #game-over-screen.hidden {
@@ -82,116 +128,197 @@ body {
 }
 
 h1 {
-    font-size: 38px;
-    color: #ef4444;
-    text-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
-    margin-bottom: 12px;
+    font-size: 48px;
+    color: #f43f5e;
+    text-shadow: 0 0 20px rgba(244, 63, 94, 0.5);
+    margin-bottom: 10px;
 }
 
-#screen-stats {
-    font-size: 16px;
-    color: #94a3b8;
-    margin-bottom: 25px;
-    line-height: 1.5;
+.stats-summary {
+    font-size: 22px;
+    margin-bottom: 30px;
+    text-align: center;
+    line-height: 1.6;
 }
 
-#screen-stats span {
+.stats-summary span {
     color: #38bdf8;
-    font-weight: bold;
 }
 
-.menu-btn, #restart-btn {
-    padding: 12px 24px;
-    font-size: 15px;
-    background: #38bdf8;
+#restart-btn {
+    background-color: #38bdf8;
+    color: #030712;
     border: none;
-    color: #020617;
+    padding: 12px 30px;
+    font-size: 18px;
+    font-family: inherit;
     font-weight: bold;
     border-radius: 6px;
     cursor: pointer;
-    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
-    transition: transform 0.1s, background-color 0.2s;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
 }
 
-.menu-btn:active, #restart-btn:active {
-    transform: scale(0.96);
+#restart-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(56, 189, 248, 0.7);
 }
 
+/* ✨ PARTICULES D'EXPLOSION */
+.particle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 5;
+    animation: explode 0.4s ease-out forwards;
+}
+
+@keyframes explode {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--mx), var(--my)) scale(0);
+        opacity: 0;
+    }
+}
+
+/* 🫨 ANIMATION DE SECOUSSE DE L'ÉCRAN */
+@keyframes shake {
+    0% { transform: translate(0, 0); }
+    10% { transform: translate(-4px, -2px); }
+    20% { transform: translate(3px, 4px); }
+    30% { transform: translate(-4px, 3px); }
+    40% { transform: translate(3px, -2px); }
+    50% { transform: translate(-2px, 4px); }
+    60% { transform: translate(4px, 2px); }
+    70% { transform: translate(-3px, -3px); }
+    80% { transform: translate(3px, 2px); }
+    90% { transform: translate(-2px, -2px); }
+    100% { transform: translate(0, 0); }
+}
+
+.shake-active {
+    animation: shake 0.2s ease-in-out;
+}
 #game-credits {
-    margin-top: 40px;
-    font-size: 13px;
-    color: #64748b;
+    margin-top: 25px;
+    font-size: 14px;
+    color: #64748b; /* Gris bleu discret */
+    letter-spacing: 1px;
 }
-
 #game-credits span {
-    color: #cbd5e1;
-}
-
-/* ==========================================
-   4. ETYPES DE TEXTES ET LASERS EN JEU
-   ========================================== */
-.word-container {
-    position: absolute;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 22px;
+    color: #38bdf8; /* Votre nom s'affichera dans le bleu brillant du HUD */
     font-weight: bold;
-    color: #94a3b8;
-    white-space: nowrap;
-    transform: translateX(-50%);
-    will-change: top;
-    z-index: 20;
 }
-
-.letter {
-    transition: color 0.05s;
-}
-
-.letter.targetable {
-    color: #38bdf8;
-    text-shadow: 0 0 5px #38bdf8;
-}
-
-.letter.active {
-    color: #22d3ee;
-    text-shadow: 0 0 8px #22d3ee;
-}
-
-.letter.destroyed {
-    color: #1e293b;
-    text-shadow: none;
-}
-
-#player-ship {
-    position: absolute;
-    bottom: 35px;
-    left: 50%;
-    width: 55px;
-    height: 55px;
-    transform: translateX(-50%);
-    z-index: 10;
-    transition: left 0.1s ease-out;
-}
-
 /* ==========================================
-   5. MODE COMPACT CONFIGURÉ POUR MOBILE
+   ADAPTATION TOUS ÉCRANS (RESPONSIVE)
    ========================================== */
-body.mode-mobile #hud {
-    top: 55px !important; /* Descend sous l'encoche et la barre Chrome */
-    font-size: 11px;
-    padding: 8px 10px;
-    gap: 5px;
+
+/* Tablettes (Écrans inférieurs à 768px) */
+@media (max-width: 768px) {
+    .word-container {
+        font-size: 20px; /* Réduit la taille des mots */
+        letter-spacing: 2px;
+    }
+    #hud {
+        font-size: 16px;
+        padding: 8px 12px;
+    }
+    h1 {
+        font-size: 36px;
+    }
 }
 
-body.mode-mobile .word-container {
-    font-size: 16px !important;
+/* Smartphones (Écrans inférieurs à 480px) */
+/* Smartphones (Écrans inférieurs à 480px) */
+@media (max-width: 480px) {
+    #hud {
+        font-size: 11px;
+        padding: 8px 5px;
+        background: #0f172a; /* Plus opaque sur mobile pour masquer le passage des mots derrière */
+    }
+
+    .word-container {
+        font-size: 15px; 
+        letter-spacing: 1px;
+    }
+
+    #player-ship {
+        bottom: 15px; 
+        width: 42px;
+        height: 42px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
 }
 
-body.mode-mobile #player-ship {
-    bottom: 25px !important;
-    width: 44px;
-    height: 44px;
+    .word-container {
+        font-size: 15px; 
+        letter-spacing: 1px;
+    }
+
+    /* BARRE DE SCORE ANCRÉE PLUS BAS POUR RESTER DANS LE CHAMP */
+    #hud {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.9);
+    padding: 12px 20px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px;
+    color: #fff;
+    border-bottom: 2px solid #1e293b;
+    z-index: 100;
+    /* On s'assure qu'il ne bouge jamais */
+    position: relative; 
+    width: 100%;
+    box-sizing: border-box;
 }
 
-body.mode-mobile h1 {
-    font-size: 26px;
+
+    /* POSITION DU VAISSEAU REMONTÉE POUR NE PAS COINCER SOUS LE CLAVIER */
+    #player-ship {
+        bottom: 20px; 
+        width: 40px;
+        height: 40px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+}
+
+    }
+
+    .word-container {
+        font-size: 16px; 
+        letter-spacing: 1px;
+    }
+
+    /* BARRE DE SCORE DÉPLACÉE POUR RESTER VISIBLE */
+    #hud {
+        font-size: 11px;
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        padding: 6px 10px;
+        background: rgba(15, 23, 42, 0.9); /* Plus opaque pour être lisible par-dessus les mots */
+    }
+
+    /* POSITION DU VAISSEAU AJUSTÉE POUR LE CLAVIER */
+    #player-ship {
+        bottom: 40px; 
+        width: 45px;
+        height: 45px;
+    }
+
+    h1 {
+        font-size: 26px;
+    }
 }
